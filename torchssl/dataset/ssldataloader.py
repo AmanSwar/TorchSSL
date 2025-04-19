@@ -3,14 +3,15 @@ from PIL import Image
 from tqdm import tqdm
 from torch.utils.data import Dataset , DataLoader , WeightedRandomSampler
 import numpy as np
+from torchvision.transforms import transforms
 
-
-class __SSLDataset(Dataset):
+class SSLDataset(Dataset):
     
     def __init__(self , data_dir , augmentation):
         super().__init__()
         
         self.aug = augmentation
+        self.tensor_aug = transforms.ToTensor()
         self.IMAGE_PATH = []    
         #traverse along paths
         for img in tqdm(os.listdir(data_dir)):
@@ -27,7 +28,7 @@ class __SSLDataset(Dataset):
         if self.aug:
             return self.aug(img)
         
-        return img
+        return self.tensor_aug(img)
     
 
 class SSLDataloader(DataLoader):
@@ -44,7 +45,7 @@ class SSLDataloader(DataLoader):
         #check if the directory exist
         assert os.path.exists(data_dir) , "Path doesn't exist"
 
-        __ssl_ds = __SSLDataset(data_dir=data_dir , augmentation=augmentation)
+        __ssl_ds = SSLDataset(data_dir=data_dir , augmentation=augmentation)
 
         super(SSLDataloader , self).__init__(
             dataset=__ssl_ds,
