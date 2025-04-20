@@ -3,6 +3,29 @@ import torch.nn as nn
 from torchssl.framework.ssl import SSL
 from torchssl.loss.python.ntxent import NTXentLoss
 import logging
+from torchssl.framework.utils import save_checkpoint
+
+class SimclrMLP(nn.Module):
+    def __init__(
+            self,
+            backbone_feat,
+            hidden_dim,
+            projection_dim
+    ):
+        
+        super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(in_features=backbone_feat , out_features=hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(in_features=hidden_dim , out_features=projection_dim)
+        )
+
+    def forward(self , x):
+
+        out = self.mlp(x)
+
+        return out
+
 
 
 class SimclrModel(nn.Module):
@@ -10,20 +33,17 @@ class SimclrModel(nn.Module):
     def __init__(
             self,
             backbone_model,
-            projection_dim,
-            hidden_dim,
+            projector_head
     ):
+        super().__init__()
         self.backbone_model = backbone_model
         backbone_feat = self.backbone_model.get_features()
-        self.projection_dim = projection_dim
-        self.mlp = nn.Sequential(
-            nn.Linear(in_features=backbone_feat , out_features=hidden_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(in_features=hidden_dim , out_features=projection_dim)
-        )
+        self.projection_dim = projector_head
+
+        self.projector_head = projector_head
         
     def forward(self , x):
-        out = self.mlp(self.backbone_model(x))
+        out = self.projector_head(self.backbone_model(x))
         return out
     
 
@@ -32,12 +52,15 @@ class SimCLR(SSL):
 
     def __init__(
             self,
-            model,
+            backbone_model,
+            hidden_dim,
+            projection_dim,
             temperature,
             device,
             wandb_run= None
 
     ):
+        super().__init__(device=device , wandb_run=wandb_run)
         self.wandb_run = wandb_run
         self.temp = temperature
         self.device = device
@@ -46,7 +69,21 @@ class SimCLR(SSL):
             temp=self.temp,
             device=self.device
         )
-        self.model = model
+
+        self.backbone_model = backbone_model
+        backbone_feat = self.backbone_model.get_features()
+
+        self.projector_head = SimclrMLP(
+            backbone_feat=backbone_feat,
+            hidden_dim=hidden_dim,
+            projection_dim=projection_dim
+        )
+
+        self.model = SimclrModel(
+            backbone_model=backbone_model,
+            projector_head=self.projector_head
+        )
+
 
 
     def train_one_epoch(
@@ -56,6 +93,8 @@ class SimCLR(SSL):
             scheduler,
             epoch,
             ):
+        
+        self.model.train()
         running_loss = 0.0
 
         for i , (x1 , x2) in enumerate(dataloader):
@@ -98,8 +137,7 @@ class SimCLR(SSL):
                 epoch,
                 ):
         
-        self.backbone_model.eval()
-        self.mlp.eval()
+        self.model.eval()
 
         running_loss = 0
 
@@ -175,7 +213,7 @@ class SimCLR(SSL):
                 epoch=epoch,
             )
 
-            val_loss = self.validate(
+            valid_loss = self.validate(
                 dataloader=valid_dataloader,
                 epoch=epoch
             )
@@ -191,7 +229,7 @@ class SimCLR(SSL):
                         'optimizer_state_dict': optimizer.state_dict(),
                         'scheduler_state_dict': scheduler.state_dict(),  
                         'train_loss': train_loss,
-                        'val_loss': val_loss,
+                        'val_loss': valid_loss,
                     }
                     epoch_ckpt = f"checkpoint_epoch_{epoch+1}.pth"
                     save_checkpoint(checkpoint_state, checkpoint_dir, epoch_ckpt)
