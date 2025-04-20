@@ -4,8 +4,9 @@ import logging
 from torchssl.framework.ssl import SSL
 from tqdm import tqdm
 from torchssl.loss.python.infonce import infonce_loss
+from copy import deepcopy
 
-#moco model
+from torchssl.framework.utils import save_checkpoint
 
 
 class MocoModel(nn.Module):
@@ -35,20 +36,19 @@ class MocoModel(nn.Module):
 
 
         #key define
-        self.key_encoder = encoder_model
+        self.key_encoder = deepcopy(encoder_model)
         self.key_projector = nn.Sequential(
             nn.Linear(encoder_feature_dim , hidden_dim),
             nn.ReLU(inplace=True),
             nn.Linear(hidden_dim , projection_dim)
         )
 
-
         #initialize key weights-> same as query + stop gradient in key
         for q_param , k_param in zip(self.query_encoder.parameters() , self.key_encoder.parameters()):
             k_param.data.copy_(q_param.data)
             k_param.requires_grad_ = False
 
-        for q_param,  k_param in zip(self.query_projector , self.key_projector):
+        for q_param,  k_param in zip(self.query_projector.parameters() , self.key_projector.parameters()):
             k_param.data.copy_(q_param.data)
             k_param.requires_grad_ = False
         
@@ -83,7 +83,7 @@ class MocoModel(nn.Module):
         for q_param , k_param in zip(self.query_encoder.parameters() , self.key_encoder.parameters()):
             k_param.data = k_param.data * self.m + q_param.data * (1 - self.m)
 
-        for q_param , k_param in zip(self.query_projector.parameters() , self.query_projector.parameters()):
+        for q_param , k_param in zip(self.query_projector.parameters() , self.key_projector.parameters()):
             k_param.data = k_param.data * self.m + q_param.data * (1 - self.m)
 
     @torch.no_grad()
@@ -151,7 +151,7 @@ class MoCO(SSL):
                 k=k_out,
                 temperature=temperature
             )
-
+            loss.backward()
             optimizer.step()
 
 
@@ -219,7 +219,7 @@ class MoCO(SSL):
             lr,
             scheduler,
             evaluation_epoch = 5,
-            save_checkpoint: int = 0,
+            save_checkpoint_epoch: int = 0,
             checkpoint_dir : str = None,
             mixed_precision=False,
             warmup_scheduler_epoch=0,
@@ -267,10 +267,10 @@ class MoCO(SSL):
 
             
 
-            if save_checkpoint > 0:
+            if save_checkpoint_epoch > 0:
                 assert checkpoint_dir != None , "checkpoint directory is not given"
 
-                if (epoch + 1) % save_checkpoint == 0:
+                if (epoch + 1) % save_checkpoint_epoch == 0:
 
                     checkpoint_state = {
                         'epoch': epoch + 1,
