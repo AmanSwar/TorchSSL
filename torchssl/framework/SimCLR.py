@@ -98,6 +98,7 @@ class SimCLR(SSL):
         self.model.train()
         running_loss = 0.0
         logging.info(f"Epoch: {epoch}")
+
         for i , (x1 , x2) in tqdm(enumerate(dataloader)):
             x1 = x1.to(self.device)
             x2 = x2.to(self.device)
@@ -115,6 +116,8 @@ class SimCLR(SSL):
             optimizer.step()
 
             running_loss += loss.item()
+
+            # logging.info(f"Epoch [{epoch+1}] Step [{i}/{len(dataloader)}] Loss: {loss.item():.4f}")
 
             if i % 10 == 0:
                 current_lr = optimizer.param_groups[0]['lr']
@@ -173,7 +176,6 @@ class SimCLR(SSL):
             optimizer,
             lr,
             scheduler,
-            evaluation_epoch = 5,
             save_checkpoint_epoch: int = 0,
             checkpoint_dir : str = None,
             mixed_precision=False,
@@ -181,6 +183,11 @@ class SimCLR(SSL):
             lr_min = 0,
 
     ):
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S"
+        )
         
         train_loss = 0
         valid_loss = 0
@@ -235,7 +242,3 @@ class SimCLR(SSL):
                     epoch_ckpt = f"checkpoint_epoch_{epoch+1}.pth"
                     save_checkpoint(checkpoint_state, checkpoint_dir, epoch_ckpt)
 
-
-            if (epoch + 1) % evaluation_epoch == 0:
-                self.linear_probe_evaluation()
-                self.knn_evaluation()
