@@ -4,7 +4,7 @@ from torchssl.model.backbones import Backbone
 
 model = Backbone("convnext_small" , in_channels=3)
 
-temp_input = torch.rand(size=(8,3,224,224))
+temp_input = torch.rand(size=(8,3,96,96))
 
 out = model(temp_input)
 
