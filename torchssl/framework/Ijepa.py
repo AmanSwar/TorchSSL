@@ -7,6 +7,8 @@ from tqdm import tqdm
 from torchssl.loss.python.ijepaloss import IJEPALoss
 from einops import rearrange
 import wandb
+
+from torchssl.framework.utils import save_checkpoint
 class IjepaModel(nn.Module):
 
     def __init__(
@@ -26,10 +28,10 @@ class IjepaModel(nn.Module):
         self.encoder_out_dim = context_encoder.get_features()
 
         self.predictor = nn.Sequential(
-            nn.Conv2d(self.out_dim, self.out_dim, kernel_size=1),
-            nn.BatchNorm2d(self.out_dim),
+            nn.Conv2d(self.encoder_out_dim, self.encoder_out_dim, kernel_size=1),
+            nn.BatchNorm2d(self.encoder_out_dim),
             nn.ReLU(inplace=True),
-            nn.Conv2d(self.out_dim, self.out_dim, kernel_size=1)
+            nn.Conv2d(self.encoder_out_dim, self.encoder_out_dim, kernel_size=1)
         )
 
         self.n_box = num_box
@@ -48,16 +50,17 @@ class IjepaModel(nn.Module):
 
 
     @torch.no_grad()
-    def momentum_update(self , target_encoder: nn.Module , context_encoder: nn.Module , momentum=0.999):
-        for target_param, context_param in zip(target_encoder.parameters(), context_encoder.parameters()):
-            #inplace udpatation of params
-            target_param.data.mul_(momentum).add_((1 - momentum) * context_param.data)
+    def momentum_update(self, momentum=0.999):
+        for t_param, c_param in zip(
+                self.target_encoder.parameters(), 
+                self.context_encoder.parameters()):
+            t_param.data.mul_(momentum).add_(c_param.data, alpha=1-momentum)
 
     def get_random_boxes(
             self,
             batch_size
     ):
-        """Generate random target boxes for masked prediction"""
+      
         boxes = []
         for _ in range(batch_size):
             batch_boxes = []
@@ -126,19 +129,20 @@ class IJEPA(SSL):
             wandb_run
             ):
         super().__init__(device, wandb_run)
+        self.wandb_run = wandb_run
+        self.device = device
+
 
         self.model = IjepaModel(
             context_encoder=context_encoder,
             target_encoder=target_encoder,
             img_size=img_size,
             num_box=num_box
-        )
+        ).to(self.device)
 
         self.loss_fn = IJEPALoss()
 
-        self.wandb_run = wandb_run
-        self.device = device
-
+        
 
     def train_one_epoch(
             self,
@@ -155,7 +159,7 @@ class IJEPA(SSL):
         total_loss = 0
         pbar = tqdm(total=n_batch, desc=f"Epoch: {epoch}")
 
-        for batch_idx, batch in enumerate(self.train_loader):
+        for batch_idx, batch in enumerate(dataloader):
             img = batch.to(self.device)
             optimizer.zero_grad()
 
@@ -175,7 +179,7 @@ class IJEPA(SSL):
                     'batch': batch_idx
                 })
 
-            print(f"BATCH LOSS : {loss}")
+            logging.info(f"BATCH LOSS : {loss}")
             pbar.update()
 
         scheduler.step()
@@ -196,7 +200,7 @@ class IJEPA(SSL):
         total_loss = 0
         pbar = tqdm(total=n_batch, desc=f"Epoch: {epoch}")
 
-        for batch_idx, batch in enumerate(self.train_loader):
+        for batch_idx, batch in enumerate(dataloader):
             img = batch.to(self.device)
   
             pred_feat, target_feat = self.model(img)
@@ -209,7 +213,7 @@ class IJEPA(SSL):
         avg_val_loss = total_loss / n_batch
         if self.wandb_run:
             wandb.log({'val_loss': avg_val_loss, 'epoch': epoch})
-        print(f"Validation Epoch {epoch}: Loss = {avg_val_loss:.4f}")
+        logging.info(f"Validation Epoch {epoch}: Loss = {avg_val_loss:.4f}")
         return avg_val_loss
     
 
@@ -222,7 +226,7 @@ class IJEPA(SSL):
             scheduler,
             lr,
             evaluation_epoch = 5,
-            save_checkpoint: int = 0,
+            save_checkpoint_epoch: int = 0,
             checkpoint_dir : str = None,
 
     ):
@@ -244,10 +248,10 @@ class IJEPA(SSL):
                 epoch=epoch
             )
 
-            if save_checkpoint > 0:
+            if save_checkpoint_epoch > 0:
                 assert checkpoint_dir != None , "checkpoint directory is not given"
 
-                if (epoch + 1) % save_checkpoint == 0:
+                if (epoch + 1) % save_checkpoint_epoch == 0:
 
                     checkpoint_state = {
                         'epoch': epoch + 1,
