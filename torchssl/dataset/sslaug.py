@@ -44,13 +44,9 @@ class SimclrAug:
         return view1 , view2
 
 
-
-
-
-
-
 #---------------------------------------------
 #MOCO
+
 
 
 
@@ -59,8 +55,96 @@ class SimclrAug:
 #---------------------------------------------
 #DINO
 
+class DinoAug:
+
+    def __init__(
+            self,
+            global_crop_size = 224,
+            local_crop_size = 96,
+            global_crop_scale = (0.4 , 1.0),
+            local_crop_scale = (0.05, 0.4),
+            local_crop_num = 8
+    ):
+        
+        self.global_crops_scale = global_crop_scale
+        self.local_crops_scale = local_crop_scale
+        self.local_crops_number = local_crop_num
+        self.global_crops_size = global_crop_size
+        self.local_crops_size = local_crop_size
+
+        #imagenet val
+        self.mean = (0.485, 0.456, 0.406)
+        self.std = (0.229, 0.224, 0.225)
+
+        flip_and_color_jitter_trans = transforms.Compose([
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomApply(
+                [transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1)],
+                p=0.8
+            ),
+            transforms.RandomGrayscale(p=0.2),
+        ])
+        
+        normalize_trans = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=self.mean, std=self.std),
+        ])
+
+        self.global_transform1 = transforms.Compose([
+            transforms.RandomResizedCrop(
+                size=self.global_crops_size,
+                scale=self.global_crops_scale,
+                interpolation=transforms.InterpolationMode.BICUBIC,
+            ),
+            flip_and_color_jitter_trans,
+            transforms.RandomApply(
+                    [transforms.GaussianBlur(kernel_size=23 , sigma=(0.1 , 2.0))] , p=0.5
+                ),
+            normalize_trans,
+        ])
 
 
+        self.global_transform2 = transforms.Compose([
+            transforms.RandomResizedCrop(
+                size=self.global_crops_size,
+                scale=self.global_crops_scale,
+                interpolation=transforms.InterpolationMode.BICUBIC,
+            ),
+            flip_and_color_jitter_trans,
+            transforms.RandomApply(
+                    [transforms.GaussianBlur(kernel_size=23 , sigma=(0.1 , 2.0))] , 
+                    p=0.5
+                    ),
+            transforms.RandomSolarize(threshold=0.5),
+            normalize_trans,
+        ])
+        
+        self.local_transform = transforms.Compose([
+            transforms.RandomResizedCrop(
+                size=self.local_crops_size,
+                scale=self.local_crops_scale,
+                interpolation=transforms.InterpolationMode.BICUBIC,
+            ),
+            flip_and_color_jitter_trans,
+            transforms.RandomApply(
+                    [transforms.GaussianBlur(kernel_size=23 , sigma=(0.1 , 2.0))] , 
+                    p=0.5
+                    ),
+            normalize_trans,
+        ])
+
+    def __call__(self , img):
+
+        crops = []
+
+        crops.append(self.global_transform1(img=img))
+        crops.append(self.global_transform2(img=img))
+
+        for _ in range(self.local_crops_number):
+            crops.append(self.local_transform(img))
+
+        return crops
+        
 
 
 
