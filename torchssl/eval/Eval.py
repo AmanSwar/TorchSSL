@@ -108,12 +108,12 @@ class EvaluateSSL:
 
     def knn_evaluation(
             self,
-            k : int
+            k : int = 10
     ):
         """
         K-nearest neighbor evaluation
         Args:
-            k -> should be equals to number of classes
+            k -> should be equals to number of classes (default = 10 (stl10))
         """
         logging.info("\nStarting KNN evaluation ")
         train_feats ,train_labels = self.extract_features(self.train_loader)
