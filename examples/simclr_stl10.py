@@ -4,7 +4,7 @@ from torchssl.framework.SimCLR import SimCLR
 from torchssl.model.backbones import Backbone
 import torch
 import torch.nn as nn
-path_dir = "tests/test_data/mnist/mnist_png/train/9"
+path_dir = "tests/test_data/train_images"  #your image directory here
 ssl_dataloader = SSLDataloader(data_dir=path_dir,augmentation=SimclrAug(img_size=224),batch_size=8,num_workers=3)
 train_dl , valid_dl = ssl_dataloader()
 device = torch.device("cuda")
