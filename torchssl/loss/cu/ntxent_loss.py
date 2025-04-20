@@ -30,7 +30,7 @@ class FusedNTXentLoss(nn.Module):
 
 if __name__ == "__main__":
     # Example usage
-    batch_size = 128
+    batch_size = 1024
     feature_dim = 128
 
 
