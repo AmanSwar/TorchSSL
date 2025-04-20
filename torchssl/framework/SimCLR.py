@@ -4,7 +4,7 @@ from torchssl.framework.ssl import SSL
 from torchssl.loss.python.ntxent import NTXentLoss
 import logging
 from torchssl.framework.utils import save_checkpoint
-
+from tqdm import tqdm
 class SimclrMLP(nn.Module):
     def __init__(
             self,
@@ -38,12 +38,14 @@ class SimclrModel(nn.Module):
         super().__init__()
         self.backbone_model = backbone_model
         backbone_feat = self.backbone_model.get_features()
+        
         self.projection_dim = projector_head
 
         self.projector_head = projector_head
         
     def forward(self , x):
-        out = self.projector_head(self.backbone_model(x))
+        backbone_out = self.backbone_model(x)
+        out = self.projector_head(backbone_out)
         return out
     
 
@@ -55,8 +57,8 @@ class SimCLR(SSL):
             backbone_model,
             hidden_dim,
             projection_dim,
-            temperature,
-            device,
+            temperature=0.5,
+            device="cuda",
             wandb_run= None
 
     ):
@@ -72,12 +74,11 @@ class SimCLR(SSL):
 
         self.backbone_model = backbone_model
         backbone_feat = self.backbone_model.get_features()
-
         self.projector_head = SimclrMLP(
             backbone_feat=backbone_feat,
             hidden_dim=hidden_dim,
             projection_dim=projection_dim
-        )
+        ).to(self.device)
 
         self.model = SimclrModel(
             backbone_model=backbone_model,
@@ -96,8 +97,8 @@ class SimCLR(SSL):
         
         self.model.train()
         running_loss = 0.0
-
-        for i , (x1 , x2) in enumerate(dataloader):
+        logging.info(f"Epoch: {epoch}")
+        for i , (x1 , x2) in tqdm(enumerate(dataloader)):
             x1 = x1.to(self.device)
             x2 = x2.to(self.device)
             
