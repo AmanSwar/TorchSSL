@@ -103,7 +103,7 @@ class IjepaModel(nn.Module):
         H = context_feats.shape[2]
 
         if boxes is None:
-            boxes = self.get_random_boxes(B, H)
+            boxes = self.get_random_boxes(B)
 
         #context_feats -> prediction head
         pred_feats = self.predictor(context_feats)
@@ -225,11 +225,17 @@ class IJEPA(SSL):
             optimizer,
             scheduler,
             lr,
-            evaluation_epoch = 5,
+
             save_checkpoint_epoch: int = 0,
             checkpoint_dir : str = None,
 
     ):
+        
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S"
+        )
         train_loss = 0
         valid_loss = 0
 
@@ -264,6 +270,4 @@ class IJEPA(SSL):
                     epoch_ckpt = f"checkpoint_epoch_{epoch+1}.pth"
                     save_checkpoint(checkpoint_state, checkpoint_dir, epoch_ckpt)
 
-            if (epoch + 1) % evaluation_epoch == 0:
-                self.linear_probe_evaluation()
-                self.knn_evaluation()
+    
