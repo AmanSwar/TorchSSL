@@ -18,6 +18,9 @@ class Backbone(nn.Module):
         """
         return self.backbone.num_features
     
+    def forward_features(self , x):
+        return self.backbone.forward_features(x)
+    
     def forward(self , x):
         out = self.backbone(x)
         return out  
