@@ -7,6 +7,10 @@ from torchssl.loss.python.infonce import infonce_loss
 from copy import deepcopy
 
 from torchssl.framework.utils import save_checkpoint
+from torchssl.eval.Eval import EvaluateSSL
+
+
+
 
 
 class MocoModel(nn.Module):
@@ -122,7 +126,9 @@ class MoCO(SSL):
             hidden_dim=hidden_dim,
             queue_size=queue_size,
             momentum=momentum
-        )
+        ).to(self.device)
+
+        
 
     
     def train_one_epoch(
@@ -149,6 +155,7 @@ class MoCO(SSL):
             loss = infonce_loss(
                 q=q_out,
                 k=k_out,
+                queue= self.model.queue,
                 temperature=temperature
             )
             loss.backward()
@@ -194,6 +201,7 @@ class MoCO(SSL):
                 loss = infonce_loss(
                     q=q_out,
                     k=k_out,
+                    queue=self.model.queue,
                     temperature=temperature
                 )
                 running_loss += loss.item()
@@ -218,13 +226,28 @@ class MoCO(SSL):
             optimizer,
             lr,
             scheduler,
-            evaluation_epoch = 5,
             save_checkpoint_epoch: int = 0,
             checkpoint_dir : str = None,
             mixed_precision=False,
             warmup_scheduler_epoch=0,
             lr_min = 0,
     ):
+        
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S"
+        )
+
+        eval_module = EvaluateSSL(
+            model=self.model,
+            train_loader=train_dataloader,
+            valid_loader=valid_dataloader,
+            device=self.device,
+            wandb_run=self.wandb_run
+        )
+
+
         train_loss = 0
         valid_loss = 0
 
@@ -286,8 +309,6 @@ class MoCO(SSL):
                     save_checkpoint(checkpoint_state, checkpoint_dir, epoch_ckpt)
 
 
-            if (epoch + 1) % evaluation_epoch == 0:
-                self.linear_probe_evaluation()
-                self.knn_evaluation()
+            
 
 
