@@ -1,6 +1,6 @@
 import torch
 from torchvision.transforms import transforms
-
+from torchvision.transforms import InterpolationMode
 
 
 #--------------------------------------------
@@ -177,3 +177,33 @@ class DinoAug:
 
 #---------------------------------------------
 #IJEPA
+
+class IjepaAug:
+
+    def __init__(
+            self,
+            img_size
+    ):
+        self.mean = (0.485, 0.456, 0.406)
+        self.std = (0.229, 0.224, 0.225)
+
+        self.img_size = img_size
+
+        self.base_trans = transforms.Compose(
+            [
+                transforms.Resize(self.img_size , interpolation=InterpolationMode.BICUBIC),
+                transforms.CenterCrop(self.img_size),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=self.mean ,std=self.std)
+            ]
+        )
+
+
+    def __call__(
+            self,
+            img
+    ):
+        return self.base_trans(img=img)
+    
+    
+        
