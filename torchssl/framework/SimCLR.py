@@ -173,7 +173,7 @@ class SimCLR(SSL):
             lr,
             scheduler,
             evaluation_epoch = 5,
-            save_checkpoint: int = 0,
+            save_checkpoint_epoch: int = 0,
             checkpoint_dir : str = None,
             mixed_precision=False,
             warmup_scheduler_epoch=0,
@@ -218,10 +218,10 @@ class SimCLR(SSL):
                 epoch=epoch
             )
 
-            if save_checkpoint > 0:
+            if save_checkpoint_epoch > 0:
                 assert checkpoint_dir != None , "checkpoint directory is not given"
 
-                if (epoch + 1) % save_checkpoint == 0:
+                if (epoch + 1) % save_checkpoint_epoch == 0:
 
                     checkpoint_state = {
                         'epoch': epoch + 1,
