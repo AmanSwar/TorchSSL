@@ -10,6 +10,8 @@ class SimclrAug:
     def __init__(self , img_size):
         self.img_size = img_size
         self.base_trans = self.base_transforms()
+        self.mean = (0.485, 0.456, 0.406)
+        self.std = (0.229, 0.224, 0.225)
         
     def base_transforms(self):
         _kernel_size = int(self.img_size * 0.1)
@@ -29,8 +31,8 @@ class SimclrAug:
                     [transforms.GaussianBlur(kernel_size=_guas_blur_kernel , sigma=(0.1 , 2.0))] , p=0.5
                 ),
 
-                transforms.ToTensor()
-                
+                transforms.ToTensor(),
+                transforms.Normalize(mean=self.mean, std=self.std)
             ]   
         )
 
