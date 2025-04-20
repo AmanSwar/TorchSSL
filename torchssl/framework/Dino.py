@@ -6,10 +6,7 @@ from torchssl.framework.ssl import SSL
 from tqdm import tqdm
 from torchssl.loss.python.dinoloss import DINOLoss
 import numpy as np
-
-
-
-
+from copy import deepcopy
 
 class DinoModel(nn.Module):
 
@@ -21,7 +18,7 @@ class DinoModel(nn.Module):
             bottleneck_dim,
             teacher_temp,
             student_temp,
-            center_mom=0.9
+            # center_mom=0.9
     ):
         super().__init__()
 
@@ -30,7 +27,7 @@ class DinoModel(nn.Module):
         self.projection_dim = projection_dim
         self.hidden_dim = hidden_dim
         self.bottleneck_dim = bottleneck_dim
-        self.center_mom = center_mom
+        # self.center_mom = center_mom
 
         #intialization center 
         self.register_buffer("center" , torch.zeros(1 , projection_dim))
@@ -64,7 +61,8 @@ class DinoModel(nn.Module):
         
 
         # new init of backbone -> avoidning weight sharing -> METHOD SUGGESTED BY CLAUDE
-        backbone_copy = type(self.backbone_model)(*self.backbone_model.__init__args__)
+        # backbone_copy = type(self.backbone_model)(*self.backbone_model.__init__args__)
+        backbone_copy = deepcopy(self.backbone_model)
         return nn.Sequential(backbone_copy , projection_head)
     
 
@@ -99,16 +97,13 @@ class Dino(SSL):
     def __init__(
             self,
             backbone_model,
-            out_dim,
             projection_dim,
             hidden_dim,
             bottleneck_dim,
             teacher_temp,
             student_temp,
-            center_mom,
+            # center_mom,
             ncrops,
-            warmup_teacher_temp,
-
             device, 
             wandb_run
             ):
@@ -123,10 +118,11 @@ class Dino(SSL):
             bottleneck_dim=bottleneck_dim,
             teacher_temp=teacher_temp,
             student_temp=student_temp,
-            center_mom=center_mom
+            # center_mom=center_mom
         ).to(self.device)
-
-        backbone_model_out_dim = backbone_model.get_features()
+        self.teacher_temp = teacher_temp
+        self.student_temp = student_temp
+        self.backbone_model_out_dim = backbone_model.get_features()
         self.loss_fn = None
         self.ncrops = ncrops
 
@@ -164,7 +160,10 @@ class Dino(SSL):
                 if idx < 2:
                     teacher_outputs.append(t_out)
 
-                loss = self.loss_fn(student_outputs , teacher_outputs , epoch)
+                all_student_output = torch.cat(student_outputs, dim=0)
+                all_teacher_output = torch.cat(teacher_outputs, dim=0)
+
+                loss = self.loss_fn(all_student_output , all_teacher_output , epoch)
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -235,14 +234,10 @@ class Dino(SSL):
             optimizer,
             lr,
             scheduler,
-            out_dim,
-            ncrops,
-            warmup_teacher_temp,
-            teacher_temp,
-            warmup_teacher_temp_epochs,
+            warmup_teacher_temp=0.02,
+            warmup_teacher_temp_epochs=10,
             student_temp=0.1,
             center_momentum=0.9,
-            evaluation_epoch = 5,
             save_checkpoint: int = 0,
             checkpoint_dir : str = None,
             mixed_precision=False,
@@ -250,11 +245,17 @@ class Dino(SSL):
             lr_min = 0,
             ):
         
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S"
+        )
+        
         self.loss_fn = DINOLoss(
-            out_dim=out_dim,
-            ncrops=ncrops,
+            out_dim=self.backbone_model_out_dim,
+            ncrops=self.ncrops,
             warmup_teacher_temp=warmup_teacher_temp,
-            teacher_temp=teacher_temp,
+            teacher_temp=self.teacher_temp,
             warmup_teacher_temp_epochs=warmup_teacher_temp_epochs,
             nepochs=num_epochs,
             student_temp=student_temp,
@@ -294,7 +295,7 @@ class Dino(SSL):
 
             valid_loss = self.validate(
                     dataloader=valid_loader,
-                    temperature=teacher_temp,
+                    temperature=self.teacher_temp,
                     epoch=epoch
                 )
             
@@ -315,9 +316,7 @@ class Dino(SSL):
                     save_checkpoint(checkpoint_state, checkpoint_dir, epoch_ckpt)
 
 
-            if (epoch + 1) % evaluation_epoch == 0:
-                self.linear_probe_evaluation()
-                self.knn_evaluation()
+
 
 
 
