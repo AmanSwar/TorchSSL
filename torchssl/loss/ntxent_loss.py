@@ -5,106 +5,105 @@ from torch.autograd.function import Function
 import torch
 import torch.nn as nn
 
+
 @triton.jit
 def _ntxent_fwd_kernel(
-    z_ptr, # ptr to concatinated embedding -> (zi and zj)
-    loss_ptr, # ptr to output loss
-    BS, #batch size
-    N, # total number of embedding
-    D, # embedding dim
-    temp, # temp scaling factor
-    BLOCK_SIZE : tl.constexpr
+    z_ptr,  # ptr to concatinated embedding -> (zi and zj)
+    loss_ptr,  # ptr to output loss
+    BS,  # batch size
+    N,  # total number of embedding
+    D,  # embedding dim
+    temp,  # temp scaling factor
+    BLOCK_SIZE: tl.constexpr,
 ):
 
     pid = tl.program_id(0)
     row_z_start_ptr = pid * D + z_ptr
-    row_z_ptrs = row_z_start_ptr + tl.arange(0 , BLOCK_SIZE)
-    row_z = tl.load(row_z_ptrs)
+    row_z_ptrs = row_z_start_ptr + tl.arange(0, BLOCK_SIZE)
+    row_z = tl.load(row_z_ptrs, mask=tl.arange(0, BLOCK_SIZE) < D)
 
-    similarity_row = tl.zeros((BLOCK_SIZE,) , dtype=tl.float32)
+    sum_exp = tl.zeros((), dtype=tl.float32)
 
-    # not for similarity we need to multiple row with columns
-    for col_idx in range(0 , N):
+    # Calculate denominator: sum of exp(sim(zi, zk)/temp) for all k != i
+    for col_idx in range(0, N):
+        if pid != col_idx:  # exclude self-similarity
+            col_z_ptrs = z_ptr + col_idx * D + tl.arange(0, BLOCK_SIZE)
+            col_z = tl.load(col_z_ptrs, mask=tl.arange(0, BLOCK_SIZE) < D)
+            dot_product = tl.sum(row_z * col_z)
+            sum_exp += tl.exp(dot_product / temp)
 
-        col_z = tl.load(z_ptr + col_idx * D + tl.arange(0 , BLOCK_SIZE))
-        dot_product = tl.sum(row_z * col_z)
+    log_sum_exp = tl.log(sum_exp)
 
-        # excluding self similarity term -> i == j for denom calculations
-        if pid != col_idx:
-            similarity_row += tl.exp(dot_product / temp)
-
-    log_sum_exp = tl.log(similarity_row)
-
-    pos_idx = None
+    # Find positive pair index
     if pid < BS:
         pos_idx = pid + BS
     else:
         pos_idx = pid - BS
 
+    # Load the positive pair embedding
+    pos_z_ptrs = z_ptr + pos_idx * D + tl.arange(0, BLOCK_SIZE)
+    pos_z = tl.load(pos_z_ptrs, mask=tl.arange(0, BLOCK_SIZE) < D)
 
-    #load the positive pair embedding
-    pos_z = tl.load(z_ptr + pos_idx * D + tl.arange(0, BLOCK_SIZE))
-
+    # Calculate positive similarity
     pos_sim = tl.sum(row_z * pos_z) / temp
 
+    # Calculate loss for this sample
     row_loss = -pos_sim + log_sum_exp
 
-    tl.atomic_add(loss_ptr , row_loss)
+    # Atomic add with proper type casting
+    tl.atomic_add(loss_ptr, row_loss.to(tl.float32))
 
 
 @triton.jit
-def _ntxent_bwd_kernel(
-    z_ptr,
-    grad_z_ptr,
-    BS, N, D,
-    temp,
-    BLOCK_SIZE : tl.constexpr
-):
+def _ntxent_bwd_kernel(z_ptr, grad_z_ptr, BS, N, D, temp, BLOCK_SIZE: tl.constexpr):
 
     row_idx = tl.program_id(axis=0)
 
-    row_z = tl.load(z_ptr + row_idx * D + tl.arange(0, BLOCK_SIZE))
+    row_z_ptrs = z_ptr + row_idx * D + tl.arange(0, BLOCK_SIZE)
+    row_z = tl.load(row_z_ptrs, mask=tl.arange(0, BLOCK_SIZE) < D)
 
-    sum_exp = 0.0
+    # Calculate denominator for softmax
+    sum_exp = tl.zeros((), dtype=tl.float32)
     for j in range(N):
         if j != row_idx:
-            col_z = tl.load(z_ptr + j * D + tl.arange(0, BLOCK_SIZE))
+            col_z_ptrs = z_ptr + j * D + tl.arange(0, BLOCK_SIZE)
+            col_z = tl.load(col_z_ptrs, mask=tl.arange(0, BLOCK_SIZE) < D)
             dot_product = tl.sum(row_z * col_z)
             sum_exp += tl.exp(dot_product / temp)
 
     grad_row = tl.zeros((BLOCK_SIZE,), dtype=tl.float32)
 
-    pos_idx = None
+    # Find positive pair
     if row_idx < BS:
         pos_idx = row_idx + BS
     else:
         pos_idx = row_idx - BS
 
+    # Calculate gradient contributions
     for j in range(N):
-        # load the jth embedding
-        z_j = tl.load(z_ptr + j * D + tl.arange(0, BLOCK_SIZE))
+        if j != row_idx:  # skip self
+            z_j_ptrs = z_ptr + j * D + tl.arange(0, BLOCK_SIZE)
+            z_j = tl.load(z_j_ptrs, mask=tl.arange(0, BLOCK_SIZE) < D)
 
-        # from -ve pairs
-        if j != row_idx and j != pos_idx:
             dot_product = tl.sum(row_z * z_j)
             softmax_prob = tl.exp(dot_product / temp) / sum_exp
-            grad_row += softmax_prob * z_j
 
-    # from +ve pairs
-    z_pos = tl.load(z_ptr + pos_idx * D + tl.arange(0, BLOCK_SIZE))
-    dot_product_pos = tl.sum(row_z * z_pos)
-    softmax_prob_pos = tl.exp(dot_product_pos / temp) / sum_exp
+            if j == pos_idx:
+                # Positive pair: gradient is (p_ij - 1) * z_j / temp
+                grad_row += (softmax_prob - 1.0) * z_j / temp
+            else:
+                # Negative pair: gradient is p_ij * z_j / temp
+                grad_row += softmax_prob * z_j / temp
 
-    grad_row += (softmax_prob_pos - 1) * z_pos
-
-    final_grad = grad_row / (temp * N)
-    tl.store(grad_z_ptr + row_idx * D + tl.arange(0, BLOCK_SIZE), final_grad)
+    # Store gradient
+    grad_z_out_ptrs = grad_z_ptr + row_idx * D + tl.arange(0, BLOCK_SIZE)
+    tl.store(grad_z_out_ptrs, grad_row, mask=tl.arange(0, BLOCK_SIZE) < D)
 
 
 class _NtxentlossWrapper(Function):
 
     @staticmethod
-    def forward(ctx , z_i , z_j , temp):
+    def forward(ctx, z_i, z_j, temp):
         batch_size, D = z_i.shape
         N = 2 * batch_size
         z = torch.cat([z_i, z_j], dim=0)
@@ -124,19 +123,19 @@ class _NtxentlossWrapper(Function):
             N=N,
             D=D,
             temp=temp,
-            BLOCK_SIZE=BLOCK_SIZE
+            BLOCK_SIZE=BLOCK_SIZE,
         )
 
         return loss / N
 
     @staticmethod
-    def backward(ctx , grad_output):
+    def backward(ctx, grad_output):
 
-        z, = ctx.save_tensors
+        (z,) = ctx.saved_tensors  # Fixed: use saved_tensors instead of save_tensors
 
         temp = ctx.temp
 
-        N , D = z.shape
+        N, D = z.shape
         BS = N // 2
         grad_z = torch.zeros_like(z)
 
@@ -174,6 +173,7 @@ class NTXentLossTriton(nn.Module):
 
 
 if __name__ == "__main__":
+    # Uncomment and adjust import as needed
     from torchssl.loss.python.ntxent import NTXentLoss
     import time
 
@@ -182,6 +182,8 @@ if __name__ == "__main__":
 
     z_i = torch.randn(batch_size, feature_dim, device="cuda", requires_grad=True)
     z_j = torch.randn(batch_size, feature_dim, device="cuda", requires_grad=True)
+
+    # Comment out original_loss if import is not available
     original_loss = NTXentLoss(temp=0.5, device="cuda")
 
     triton_loss = NTXentLossTriton(temp=0.5)
@@ -194,9 +196,9 @@ if __name__ == "__main__":
     torch.cuda.synchronize()
     start = time.time()
     for _ in range(100):
-
         loss1 = original_loss(z_i, z_j)
         loss1.backward()
+        pass
     torch.cuda.synchronize()
     original_time = time.time() - start
 
