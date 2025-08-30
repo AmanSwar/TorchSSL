@@ -208,3 +208,99 @@ def _infonce_bwd_queue_kernel(
     tl.store(grad_queue_ptrs, grad_queue_vec, mask=dim_mask)
 
 
+class _InfoNCELossWrapper(Function):
+
+    @staticmethod
+    def forward(ctx, q, k, queue, temperature):
+        batch_size, dim = q.shape
+        queue_size, _ = queue.shape
+
+        q = nn.functional.normalize(q, p=2, dim=1)
+        k = nn.functional.normalize(k, p=2, dim=1)
+        queue = nn.functional.normalize(queue, p=2, dim=1)
+
+        logits = torch.zeros(
+            (batch_size, queue_size + 1), device=q.device, dtype=torch.float32
+        )
+        loss = torch.zeros(1, device=q.device, dtype=torch.float32)
+
+        ctx.save_for_backward(q, k, queue, logits)
+        ctx.temperature = temperature
+
+        BLOCK_DIM = triton.next_power_of_2(dim)
+        grid = (batch_size,)
+
+        _infonce_fwd_kernel[grid](
+            q_ptr=q,
+            k_ptr=k,
+            queue_ptr=queue,
+            logits_ptr=logits,
+            loss_ptr=loss,
+            batch_size=batch_size,
+            dim=dim,
+            queue_size=queue_size,
+            temperature=temperature,
+            BLOCK_DIM=BLOCK_DIM,
+        )
+
+        return loss / batch_size
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        q, k, queue, logits = ctx.saved_tensors
+        temperature = ctx.temperature
+
+        batch_size, dim = q.shape
+        queue_size, _ = queue.shape
+
+        grad_q = torch.zeros_like(q)
+        grad_k = torch.zeros_like(k)
+        grad_queue = torch.zeros_like(queue)
+
+        BLOCK_DIM = triton.next_power_of_2(dim)
+        grad_output_scalar = grad_output.item() / batch_size
+
+        grid_batch = (batch_size,)
+        grid_queue = (queue_size,)
+
+        _infonce_bwd_q_kernel[grid_batch](
+            q_ptr=q,
+            k_ptr=k,
+            queue_ptr=queue,
+            grad_q_ptr=grad_q,
+            logits_ptr=logits,
+            grad_output=grad_output_scalar,
+            batch_size=batch_size,
+            dim=dim,
+            queue_size=queue_size,
+            temperature=temperature,
+            BLOCK_DIM=BLOCK_DIM,
+        )
+
+        _infonce_bwd_k_kernel[grid_batch](
+            q_ptr=q,
+            k_ptr=k,
+            grad_k_ptr=grad_k,
+            logits_ptr=logits,
+            grad_output=grad_output_scalar,
+            batch_size=batch_size,
+            dim=dim,
+            queue_size=queue_size,
+            temperature=temperature,
+            BLOCK_DIM=BLOCK_DIM,
+        )
+
+        _infonce_bwd_queue_kernel[grid_queue](
+            q_ptr=q,
+            queue_ptr=queue,
+            grad_queue_ptr=grad_queue,
+            logits_ptr=logits,
+            grad_output=grad_output_scalar,
+            batch_size=batch_size,
+            dim=dim,
+            queue_size=queue_size,
+            temperature=temperature,
+            BLOCK_DIM=BLOCK_DIM,
+        )
+
+        return grad_q, grad_k, grad_queue, None
