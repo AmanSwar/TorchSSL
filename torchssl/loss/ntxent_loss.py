@@ -158,4 +158,14 @@ class _NtxentlossWrapper(Function):
         return grad_z_i, grad_z_j, None
 
 
+class NTXentLossTriton(nn.Module):
+    """
+    NT-Xent loss implementation using a custom Triton kernel.
+    """
 
+    def __init__(self, temp=0.5):
+        super().__init__()
+        self.temp = temp
+
+    def forward(self, z_i, z_j):
+        return _NtxentlossWrapper.apply(z_i, z_j, self.temp)
