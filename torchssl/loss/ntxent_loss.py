@@ -56,18 +56,18 @@ def _ntxent_fwd_kernel(
 def _ntxent_bwd_kernel(
     z_ptr,
     grad_z_ptr,
-    N, D,
+    BS, N, D,
     temp,
     BLOCK_SIZE : tl.constexpr
 ):
 
-    row_index = tl.program_id(axis=0)
+    row_idx = tl.program_id(axis=0)
 
-    row_z = tl.load(z_ptr + row_index * D + tl.arange(0, BLOCK_SIZE))
+    row_z = tl.load(z_ptr + row_idx * D + tl.arange(0, BLOCK_SIZE))
 
     sum_exp = 0.0
     for j in range(N):
-        if j != row_index:
+        if j != row_idx:
             col_z = tl.load(z_ptr + j * D + tl.arange(0, BLOCK_SIZE))
             dot_product = tl.sum(row_z * col_z)
             sum_exp += tl.exp(dot_product / temp)
@@ -75,10 +75,10 @@ def _ntxent_bwd_kernel(
     grad_row = tl.zeros((BLOCK_SIZE,), dtype=tl.float32)
 
     pos_idx = None
-    if row_idx < batch_size:
-        pos_idx = row_idx + batch_size
+    if row_idx < BS:
+        pos_idx = row_idx + BS
     else:
-        pos_idx = row_idx - batch_size
+        pos_idx = row_idx - BS
 
     for j in range(N):
         # load the jth embedding
