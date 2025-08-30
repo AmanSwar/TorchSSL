@@ -30,7 +30,7 @@ def _ntxent_fwd_kernel(
         dot_product = tl.sum(row_z * col_z)
 
         # excluding self similarity term -> i == j for denom calculations
-        if row_idx != col_idx:
+        if pid != col_idx:
             similarity_row += tl.exp(dot_product / temp)
 
     log_sum_exp = tl.log(similarity_row)
