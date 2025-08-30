@@ -304,3 +304,16 @@ class _InfoNCELossWrapper(Function):
         )
 
         return grad_q, grad_k, grad_queue, None
+
+
+class InfoNCELossTriton(nn.Module):
+    """
+    InfoNCE loss implementation using custom Triton kernels.
+    """
+
+    def __init__(self, temperature=0.2):
+        super().__init__()
+        self.temperature = temperature
+
+    def forward(self, q, k, queue):
+        return _InfoNCELossWrapper.apply(q, k, queue, self.temperature)
