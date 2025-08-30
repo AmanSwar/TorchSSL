@@ -8,11 +8,11 @@ TorchSSL is a **modular, performance-optimized** PyTorch library for **Self-Supe
 
 ---
 
-## 🚀 Features
+## Features
 
-✅ **Modular SSL Frameworks** – SimCLR, MoCo, DINO, I-JEPA  
+✅ **Modular SSL Frameworks** – SimCLR, MoCo, DINO, I-JEPA  (currently)
 ✅ **Backbones** – Currently all Convolution based architecture , Vision Transformer based support comming soon...
-✅ **Fused CUDA Loss Kernels**
+✅ **Fused Triton Loss Kernels**
 ✅ **Evaluations** – kNN & Linear Probe  
 ✅ **Visualization** – Latent space plots, full WandB support  
 
@@ -20,7 +20,7 @@ TorchSSL is a **modular, performance-optimized** PyTorch library for **Self-Supe
 
 ---
 
-## 🧪 Quickstart: SimCLR in 16 lines
+## Quickstart: SimCLR in 16 lines
 
 ```python
 from torchssl.dataset.ssldataloader import SSLDataloader
@@ -43,18 +43,15 @@ simclr.fit(train_dataloader=train_dl,valid_dataloader=valid_dl,num_epoch=10,opti
 
 ---
 
-## 🔥 Benchmarks (NT-Xent Loss Fused CUDA Kernel)
+## 🔥 Benchmarks (NT-Xent Loss Fused Triton Kernel)
 
-| Loss Type         | Batch Size | Time (S)       | Speedup |
-|------------------|------------|------------------|---------|
-| NT-Xent (vanilla)| 1024        |  16.8661           | 1x      |
-| NT-Xent (fused)  | 1024       | 4.8140             | **3.50x**  |
+![NT-Xent Loss bench](images/ntxent_loss_bench.png)
 
-> Built with custom CUDA kernels for bottleneck losses like NT-Xent. Full GPU fusion, no overhead.
+> Built with custom Triton kernels for bottleneck losses like NT-Xent. Full GPU fusion, no overhead.
 
 ---
 
-## 🧱 Project Structure
+## Library Structure
 
 ```
 torchssl/
@@ -66,21 +63,7 @@ torchssl/
 └── ...
 ```
 
----
-
-## 📦 Installation (Coming Soon)
-
-```bash
-git clone https://github.com/yourusername/torchssl
-cd torchssl
-pip install -e .
-```
-
-> ⚠ Requires PyTorch 2.0+ and a CUDA-enabled device for full performance benefits.
-
----
-
-## 🧪 Supported Methods (MVP)
+##  Supported Methods (MVP)
 
 - [x] SimCLR
 - [x] MoCo v1/v2
@@ -90,7 +73,7 @@ pip install -e .
 
 ---
 
-## 🧠 Supported Backbones
+## Supported Backbones
 
 - All kinds of Convolution based
 - Vision Transformer based comming soon
@@ -104,31 +87,25 @@ pip install -e .
 - ✅ **WandB Visualization**: Built-in logging support
 - ✅ **Latent Space Plots via PCA and tSNE**: 2D embedding of learned representations
 
----
-
-## 🤖 Optimizers (COMMING SOON)
-
-- [ ] LARS – Efficient for large-batch SSL  
-- [ ] MUON – Modern optimizer for SSL  
-- [ ] Adam / AdamW – Default fallback
-
----
+--- 
 
 ## 📈 Visual Example: Latent Space
 
 ![PCA Example](images/pca.png)
 ![tSNE Example](images/tsne.png)
 
-
+ 
 ---
 
 ## 📣 Coming Soon
 
-- ✅ DINOv2, iBOT, VICReg, BYOL  
-- ✅ Advanced evaluation suite (centered kNN, probing per class)  
-- ✅ TorchScript & JIT support  
-- ✅ Pretrained checkpoints  
-- ✅ TorchSSL Playground on CIFAR10, STL10, ImageNet
+- DINOv2, iBOT, VICReg, BYOL  
+- Triton Kernels for Dino loss , Ijepa loss and all kinds of loss functions
+- Triton Fused kernels for ViT variants
+- Advanced evaluation suite (centered kNN, probing per class)  
+- TorchScript & JIT support  
+- Pretrained checkpoints  
+- TorchSSL Playground on CIFAR10, STL10, ImageNet
 
 ---
 
