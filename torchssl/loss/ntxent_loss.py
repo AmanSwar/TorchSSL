@@ -105,7 +105,8 @@ class _NtxentlossWrapper(Function):
 
     @staticmethod
     def forward(ctx , z_i , z_j , temp):
-        batch_size, N , D = z_i.shape
+        batch_size, D = z_i.shape
+        N = 2 * batch_size
         z = torch.cat([z_i, z_j], dim=0)
         z = nn.functional.normalize(z, p=2, dim=1)
 
@@ -135,8 +136,8 @@ class _NtxentlossWrapper(Function):
 
         temp = ctx.temp
 
-        BS , N , D = z.shape
-
+        N , D = z.shape
+        BS = N // 2
         grad_z = torch.zeros_like(z)
 
         grid = (N,)
@@ -145,6 +146,7 @@ class _NtxentlossWrapper(Function):
         _ntxent_bwd_kernel[grid](
             z_ptr=z,
             grad_z_ptr=grad_z,
+            BS=BS,
             N=N,
             D=D,
             temp=temp,
