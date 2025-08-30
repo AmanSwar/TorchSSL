@@ -176,6 +176,7 @@ if __name__ == "__main__":
     # Uncomment and adjust import as needed
     from torchssl.loss.python.ntxent import NTXentLoss
     import time
+    import matplotlib.pyplot as plt
 
     batch_size = 1024
     feature_dim = 128
@@ -200,7 +201,7 @@ if __name__ == "__main__":
         loss1.backward()
         pass
     torch.cuda.synchronize()
-    original_time = time.time() - start
+    original_time = (time.time() - start) / 100
 
     torch.cuda.synchronize()
     start = time.time()
@@ -208,8 +209,19 @@ if __name__ == "__main__":
         loss2 = triton_loss(z_i, z_j)
         loss2.backward()
     torch.cuda.synchronize()
-    cuda_time = time.time() - start
+    cuda_time = (time.time() - start) /100
 
+    label_arr = ["Pytorch" , "Triton"]
+    time_arr = []
+    time_arr.append(original_time)
+    time_arr.append(cuda_time)
+    plt.figure(figsize=(10, 6))
+    plt.bar(label_arr, time_arr, color="darkgreen")
+
+    plt.title("NT-Xent Loss")  
+    plt.xlabel("Kernels")
+    plt.ylabel("Time in ms/iter (The lower the better)")
+    plt.show()
     print(f"Original implementation: {original_time:.4f}s")
     print(f"Triton implementation: {cuda_time:.4f}s")
     print(f"Speedup: {original_time / cuda_time:.2f}x")
