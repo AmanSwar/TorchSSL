@@ -169,3 +169,43 @@ class NTXentLossTriton(nn.Module):
 
     def forward(self, z_i, z_j):
         return _NtxentlossWrapper.apply(z_i, z_j, self.temp)
+
+
+if __name__ == "__main__":
+    from torchssl.loss.python.ntxent import NTXentLoss
+    import time
+
+    batch_size = 1024
+    feature_dim = 128
+
+    z_i = torch.randn(batch_size, feature_dim, device="cuda", requires_grad=True)
+    z_j = torch.randn(batch_size, feature_dim, device="cuda", requires_grad=True)
+    original_loss = NTXentLoss(temp=0.5, device="cuda")
+
+    triton_loss = NTXentLossTriton(temp=0.5)
+
+    # warmup
+    for _ in range(10):
+        _ = original_loss(z_i, z_j)
+        _ = triton_loss(z_i, z_j)
+
+    torch.cuda.synchronize()
+    start = time.time()
+    for _ in range(100):
+
+        loss1 = original_loss(z_i, z_j)
+        loss1.backward()
+    torch.cuda.synchronize()
+    original_time = time.time() - start
+
+    torch.cuda.synchronize()
+    start = time.time()
+    for _ in range(100):
+        loss2 = triton_loss(z_i, z_j)
+        loss2.backward()
+    torch.cuda.synchronize()
+    cuda_time = time.time() - start
+
+    print(f"Original implementation: {original_time:.4f}s")
+    print(f"Triton implementation: {cuda_time:.4f}s")
+    print(f"Speedup: {original_time / cuda_time:.2f}x")
