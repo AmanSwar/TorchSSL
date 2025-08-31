@@ -1,26 +1,48 @@
-
 # TorchSSL — A High-Performance Library for Self-Supervised Learning in PyTorch
 ![TorchSSL Logo](images/TorchSSL_logo.png)
 
 TorchSSL is a **modular, performance-optimized** PyTorch library for **Self-Supervised Learning (SSL)** in computer vision. It's built to scale — from quick experimentation to production-grade pipelines — without the boilerplate of most PyTorch wrappers.
 
-> 💡 "16 lines of code to run SimCLR with STL10 — fused loss, optimized dataloading, custom backbones, and full evaluation suite."
-
 ---
 
 ## Features
 
-✅ **Modular SSL Frameworks** – SimCLR, MoCo, DINO, I-JEPA  (currently)
-✅ **Backbones** – Currently all Convolution based architecture , Vision Transformer based support comming soon...
-✅ **Fused Triton Loss Kernels**
-✅ **Evaluations** – kNN & Linear Probe  
-✅ **Visualization** – Latent space plots, full WandB support  
+- ✅ **Modular SSL Frameworks**: SimCLR, MoCo, DINO, and I-JEPA.
+- ✅ **Flexible Backbones**: Supports a wide range of convolutional architectures, with Vision Transformer (ViT) support coming soon.
+- ✅ **Fused Triton Loss Kernels**: High-performance loss functions (like NT-Xent) with custom Triton kernels for maximum GPU utilization.
+- ✅ **Comprehensive Evaluation Suite**: Built-in kNN and Linear Probing evaluation.
+- ✅ **Rich Visualization**: Integrated support for Weights & Biases (WandB) and latent space visualization with PCA and t-SNE.
 
+---
 
+## Installation
+
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/AmanSwar/TorchSSL.git
+    cd TorchSSL
+    ```
+
+2.  **Install dependencies:**
+    It is recommended to create a `requirements.txt` file with the following content and install it.
+    ```
+    torch
+    torchvision
+    pytorch-lightning
+    wandb
+    scikit-learn
+    matplotlib
+    ```
+    Then, run:
+    ```bash
+    pip install -r requirements.txt
+    ```
 
 ---
 
 ## Quickstart: SimCLR in 16 lines
+
+Here is a minimal example of how to train a SimCLR model on a directory of images.
 
 ```python
 from torchssl.dataset.ssldataloader import SSLDataloader
@@ -29,83 +51,93 @@ from torchssl.framework.SimCLR import SimCLR
 from torchssl.model.backbones import Backbone
 import torch
 import torch.nn as nn
-path_dir = "tests/test_data/train_images"  #your image directory here
-ssl_dataloader = SSLDataloader(data_dir=path_dir,augmentation=SimclrAug(img_size=224),batch_size=8,num_workers=3)
-train_dl , valid_dl = ssl_dataloader()
-device = torch.device("cuda")
-model = Backbone("convnext_tiny" , in_channels=1).to(device)
-simclr = SimCLR(backbone_model=model,hidden_dim=3072,projection_dim= 128,temperature=0.5,)
+
+# 1. Setup Dataloader
+path_dir = "tests/test_data/train_images"  # Your image directory here
+ssl_dataloader = SSLDataloader(
+    data_dir=path_dir,
+    augmentation=SimclrAug(img_size=224),
+    batch_size=8,
+    num_workers=3
+)
+train_dl, valid_dl = ssl_dataloader()
+
+# 2. Define Model and Framework
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model = Backbone("convnext_tiny", in_channels=3).to(device) # Use in_channels=1 for grayscale
+simclr = SimCLR(
+    backbone_model=model,
+    hidden_dim=3072,
+    projection_dim=128,
+    temperature=0.5,
+)
+
+# 3. Define Optimizer and Scheduler
 lr = 1e-5
-optim = torch.optim.Adam(simclr.model.parameters() , lr=lr)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optim, T_max=len(train_dl), eta_min=0,last_epoch=-1)
-simclr.fit(train_dataloader=train_dl,valid_dataloader=valid_dl,num_epoch=10,optimizer=optim,scheduler=scheduler,lr=lr)
+optim = torch.optim.Adam(simclr.model.parameters(), lr=lr)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optim, T_max=len(train_dl), eta_min=0)
+
+# 4. Train the model
+simclr.fit(
+    train_dataloader=train_dl,
+    valid_dataloader=valid_dl,
+    num_epoch=10,
+    optimizer=optim,
+    scheduler=scheduler,
+    lr=lr
+)
+```
+
+---
+## Running Examples
+
+The `examples/` directory contains ready-to-run scripts. For instance, to run the SimCLR example on the STL-10 dataset, you would first need to download the data and then run the script:
+
+```bash
+# (Assuming you have the STL-10 dataset in the correct path)
+python examples/simclr_stl10.py
 ```
 
 ---
 
 ## 🔥 Benchmarks (NT-Xent Loss Fused Triton Kernel)
 
-![NT-Xent Loss bench](images/ntxent_loss_bench.png)
+TorchSSL uses custom Triton kernels for bottleneck losses like NT-Xent for full GPU fusion and no overhead.
 
-> Built with custom Triton kernels for bottleneck losses like NT-Xent. Full GPU fusion, no overhead.
+![NT-Xent Loss bench](images/ntxent_loss_bench.png)
 
 ---
 
-## Library Structure
+## Supported Methods
 
-```
-torchssl/
-├── dataset/           # SSLDataLoader, augmentations
-├── model/             # Backbone loader 
-├── framework/         # SSL methods (SimCLR, DINO, MoCo, I-JEPA)
-├── losses/            # Fused CUDA + PyTorch loss functions
-├── eval/              # kNN, linear probe evaluators + latent space visuals     
-└── ...
-```
-
-##  Supported Methods (MVP)
-
-- [x] SimCLR
-- [x] MoCo v1/v2
-- [x] DINO
-- [x] I-JEPA
+- [x] **SimCLR**
+- [x] **MoCo v1/v2**
+- [x] **DINO**
+- [x] **I-JEPA**
 - [ ] BYOL, Barlow Twins, VICReg (Coming soon)
 
 ---
 
-## Supported Backbones
+## 📊 Evaluations & Visualizations
 
-- All kinds of Convolution based
-- Vision Transformer based comming soon
-
----
-
-## 📊 Evaluations
-
-- ✅ **kNN Evaluation**: Simple, fast, and useful for representation quality
-- ✅ **Linear Probing**: Train a linear classifier on frozen features
-- ✅ **WandB Visualization**: Built-in logging support
-- ✅ **Latent Space Plots via PCA and tSNE**: 2D embedding of learned representations
-
---- 
-
-## 📈 Visual Example: Latent Space
+- ✅ **kNN Evaluation**: Simple, fast, and useful for representation quality.
+- ✅ **Linear Probing**: Train a linear classifier on frozen features.
+- ✅ **WandB Visualization**: Built-in logging support for all metrics and losses.
+- ✅ **Latent Space Plots**: 2D embedding of learned representations via PCA and t-SNE.
 
 ![PCA Example](images/pca.png)
 ![tSNE Example](images/tsne.png)
 
- 
 ---
 
-## 📣 Coming Soon
+##  Roadmap
 
-- DINOv2, iBOT, VICReg, BYOL  
-- Triton Kernels for Dino loss , Ijepa loss and all kinds of loss functions
-- Triton Fused kernels for ViT variants
-- Advanced evaluation suite (centered kNN, probing per class)  
-- TorchScript & JIT support  
-- Pretrained checkpoints  
-- TorchSSL Playground on CIFAR10, STL10, ImageNet
+- [ ] DINOv2, iBOT, VICReg, BYOL
+- [ ] Triton Kernels for DINO loss, I-JEPA loss, and others.
+- [ ] Triton Fused kernels for ViT variants.
+- [ ] Advanced evaluation suite (centered kNN, probing per class).
+- [ ] TorchScript & JIT support for deployment.
+- [ ] Pretrained checkpoints.
 
 ---
 
@@ -113,31 +145,14 @@ torchssl/
 
 Built by [**Aman Swar**](https://github.com/AmanSwar) — aspiring AI systems engineer with a deep interest in large-scale training, CUDA kernels, and high-performance deep learning systems.
 
-> 💬 **DMs open** for collabs, internships, or research discussions.
-
 ---
 
 ## 🛡 License
 
-MIT License. Free for academic & commercial use. Open-source forever.
+This project is licensed under the MIT License. See the `LICENSE` file for details.
 
 ---
 
 ## 🌟 Star the Repo
 
-If you like the project, consider leaving a ⭐ — it helps more than you think!
-
-```
-[git clone https://github.com/AmanSwar/torchssl](https://github.com/AmanSwar/TorchSSL)
-```
-
----
-
-```
-
-Let me know when you want to:
-- Add **Colab demo notebook**
-- Write the **launch tweet or LinkedIn post**
-- Turn this into a full **open-source project page**
-
-This README alone gives off **FAIR/NVIDIA vibes**. Let's make the launch 🔥.
+If you like this project, please consider leaving a ⭐ — it helps more than you think!
