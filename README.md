@@ -1,19 +1,16 @@
-# TorchSSL — A High-Performance Library for Self-Supervised Learning in PyTorch
+# TorchSSL: A High-Performance Library for Self-Supervised Learning in PyTorch
+
 ![TorchSSL Logo](images/TorchSSL_logo.png)
 
-TorchSSL is a **modular, performance-optimized** PyTorch library for **Self-Supervised Learning (SSL)** in computer vision. It's built to scale — from quick experimentation to production-grade pipelines — without the boilerplate of most PyTorch wrappers.
-
----
+TorchSSL is a modular and performance-optimized PyTorch library for Self-Supervised Learning (SSL) in computer vision. It is designed for scalability, enabling quick experimentation and production-grade pipelines without the boilerplate code often associated with PyTorch wrappers.
 
 ## Features
 
-- ✅ **Modular SSL Frameworks**: SimCLR, MoCo, DINO, and I-JEPA.
-- ✅ **Flexible Backbones**: Supports a wide range of convolutional architectures, with Vision Transformer (ViT) support coming soon.
-- ✅ **Fused Triton Loss Kernels**: High-performance loss functions (like NT-Xent) with custom Triton kernels for maximum GPU utilization.
-- ✅ **Comprehensive Evaluation Suite**: Built-in kNN and Linear Probing evaluation.
-- ✅ **Rich Visualization**: Integrated support for Weights & Biases (WandB) and latent space visualization with PCA and t-SNE.
-
----
+- **Modular SSL Frameworks**: Implementations of SimCLR, MoCo, DINO, and I-JEPA.
+- **Flexible Backbones**: Supports a wide range of convolutional architectures from `timm`, with Vision Transformer (ViT) support planned.
+- **Fused Triton Loss Kernels**: High-performance loss functions (e.g., NT-Xent) with custom Triton kernels for optimized GPU utilization.
+- **Comprehensive Evaluation Suite**: Built-in k-Nearest Neighbors (kNN) and Linear Probing for evaluation.
+- **Rich Visualization**: Integrated support for Weights & Biases (WandB) and latent space visualization with PCA and t-SNE.
 
 ## Installation
 
@@ -24,7 +21,7 @@ TorchSSL is a **modular, performance-optimized** PyTorch library for **Self-Supe
     ```
 
 2.  **Install dependencies:**
-    It is recommended to create a `requirements.txt` file with the following content and install it.
+    Create a `requirements.txt` file with the following content:
     ```
     torch
     torchvision
@@ -32,13 +29,15 @@ TorchSSL is a **modular, performance-optimized** PyTorch library for **Self-Supe
     wandb
     scikit-learn
     matplotlib
+    timm
+    tqdm
+    einops
+    triton
     ```
     Then, run:
     ```bash
     pip install -r requirements.txt
     ```
-
----
 
 ## Quickstart: SimCLR in 16 lines
 
@@ -88,7 +87,6 @@ simclr.fit(
 )
 ```
 
----
 ## Running Examples
 
 The `examples/` directory contains ready-to-run scripts. For instance, to run the SimCLR example on the STL-10 dataset, you would first need to download the data and then run the script:
@@ -98,15 +96,11 @@ The `examples/` directory contains ready-to-run scripts. For instance, to run th
 python examples/simclr_stl10.py
 ```
 
----
+## Benchmarks (NT-Xent Loss Fused Triton Kernel)
 
-## 🔥 Benchmarks (NT-Xent Loss Fused Triton Kernel)
-
-TorchSSL uses custom Triton kernels for bottleneck losses like NT-Xent for full GPU fusion and no overhead.
+TorchSSL uses custom Triton kernels for bottleneck losses like NT-Xent for full GPU fusion and minimal overhead.
 
 ![NT-Xent Loss bench](images/ntxent_loss_bench.png)
-
----
 
 ## Supported Methods
 
@@ -116,21 +110,17 @@ TorchSSL uses custom Triton kernels for bottleneck losses like NT-Xent for full 
 - [x] **I-JEPA**
 - [ ] BYOL, Barlow Twins, VICReg (Coming soon)
 
----
+## Evaluations & Visualizations
 
-## 📊 Evaluations & Visualizations
-
-- ✅ **kNN Evaluation**: Simple, fast, and useful for representation quality.
-- ✅ **Linear Probing**: Train a linear classifier on frozen features.
-- ✅ **WandB Visualization**: Built-in logging support for all metrics and losses.
-- ✅ **Latent Space Plots**: 2D embedding of learned representations via PCA and t-SNE.
+- **kNN Evaluation**: Simple, fast, and useful for evaluating representation quality.
+- **Linear Probing**: Train a linear classifier on frozen features.
+- **WandB Visualization**: Built-in logging support for all metrics and losses.
+- **Latent Space Plots**: 2D embedding of learned representations via PCA and t-SNE.
 
 ![PCA Example](images/pca.png)
 ![tSNE Example](images/tsne.png)
 
----
-
-##  Roadmap
+## Roadmap
 
 - [ ] DINOv2, iBOT, VICReg, BYOL
 - [ ] Triton Kernels for DINO loss, I-JEPA loss, and others.
@@ -139,20 +129,10 @@ TorchSSL uses custom Triton kernels for bottleneck losses like NT-Xent for full 
 - [ ] TorchScript & JIT support for deployment.
 - [ ] Pretrained checkpoints.
 
----
+## Author
 
-## 🧑‍💻 Author
+Built by [Aman Swar](https://github.com/AmanSwar) — an aspiring AI systems engineer with a deep interest in large-scale training, CUDA kernels, and high-performance deep learning systems.
 
-Built by [**Aman Swar**](https://github.com/AmanSwar) — aspiring AI systems engineer with a deep interest in large-scale training, CUDA kernels, and high-performance deep learning systems.
-
----
-
-## 🛡 License
+## License
 
 This project is licensed under the MIT License. See the `LICENSE` file for details.
-
----
-
-## 🌟 Star the Repo
-
-If you like this project, please consider leaving a ⭐ — it helps more than you think!
